@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-engine
+  template:
+    metadata:
+      labels:
+        app: fraud-engine
+    spec:
+      containers:
+      - name: fraud-engine
+        image: fraud-engine:latest
+        imagePullPolicy: Never
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: LEDGER_URL
+          value: "http://ledger-service:3002/transaction/update"

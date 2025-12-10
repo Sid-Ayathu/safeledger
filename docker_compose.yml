@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # 1. Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: safeledger-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - safeledger-net
+
+  # 2. API Gateway (Entry Point)
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - LEDGER_SERVICE_URL=http://ledger-service:3002
+    depends_on:
+      - auth-service
+      - ledger-service
+    networks:
+      - safeledger-net
+
+  # 3. Auth Service
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "3001:3001"
+    networks:
+      - safeledger-net
+
+  # 4. Ledger Service
+  ledger-service:
+    build: ./ledger-service
+    ports:
+      - "3002:3002"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - RABBITMQ_URL=amqp://rabbitmq
+    depends_on:
+      - rabbitmq
+      - auth-service
+    networks:
+      - safeledger-net
+
+  # 5. Fraud Engine (Worker)
+  fraud-engine:
+    build: ./fraud-engine
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - LEDGER_URL=http://ledger-service:3002/transaction/update
+    depends_on:
+      - rabbitmq
+      - ledger-service
+    networks:
+      - safeledger-net
+
+networks:
+  safeledger-net:
+    driver: bridge

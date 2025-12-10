@@ -1,0 +1,46 @@
+---
+- name: Provision SafeLedger Server
+  hosts: app_servers
+  become: yes  # Run as root (sudo)
+  
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Start and Enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Kubernetes Client (kubectl)
+      shell: |
+        curl -LO "[https://dl.k8s.io/release/$(curl](https://dl.k8s.io/release/$(curl) -L -s [https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl](https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl)"
+        install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+    - name: Install Python Dependencies (for Fraud Engine)
+      pip:
+        name:
+          - pika
+          - requests
+          
+    - name: Install Kubernetes Metrics Server (Required for HPA)
+      shell: |
+        kubectl apply -f [https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml](https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml)
+      ignore_errors: yes # May fail if K8s isn't fully ready yet, which is fine for a first run
