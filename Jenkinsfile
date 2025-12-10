@@ -4,7 +4,6 @@ pipeline {
     environment {
         // In a real Jenkins, these are set in "Manage Credentials"
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-login')
-        KUBECONFIG = credentials('kubeconfig-file')
     }
 
     stages {
