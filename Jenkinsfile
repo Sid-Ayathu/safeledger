@@ -10,9 +10,9 @@ pipeline {
         stage('Setup Tools') {
             steps {
                 script {
-                    echo '🔧 Installing Docker & Kubectl...'
-                    // 1. Install Docker CLI (using apt-get since we run as root)
-                    sh 'apt-get update && apt-get install -y docker.io'
+                    echo '🔧 Installing Tools (Docker, Kubectl, Node.js)...'
+                    // 1. Install Docker CLI and Node.js/NPM (using apt-get since we run as root)
+                    sh 'apt-get update && apt-get install -y docker.io nodejs npm'
                     
                     // 2. Install Kubectl
                     sh 'curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
