@@ -34,6 +34,8 @@ pipeline {
                      // Only running Ledger tests for now
                      dir('ledger-service') {
                          sh 'npm install'
+                         // Fix permission issue where jest binary is not executable
+                         sh 'chmod +x node_modules/.bin/jest'
                          sh 'npm test'
                      }
                  }
