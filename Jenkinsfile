@@ -2,28 +2,56 @@ pipeline {
     agent any
 
     environment {
-        // In a real Jenkins, these are set in "Manage Credentials"
+        // This pulls your username/password from the "dockerhub-login" credential you created
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-login')
     }
 
     stages {
+        stage('Setup Tools') {
+            steps {
+                script {
+                    echo '🔧 Installing Docker & Kubectl...'
+                    // 1. Install Docker CLI (using apt-get since we run as root)
+                    sh 'apt-get update && apt-get install -y docker.io'
+                    
+                    // 2. Install Kubectl
+                    sh 'curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                    sh 'chmod +x kubectl && mv kubectl /usr/local/bin/'
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
-                // Get code from GitHub
                 checkout scm
             }
+        }
+
+        stage('Test') {
+             steps {
+                 script {
+                     echo '🧪 Running Tests...'
+                     // Only running Ledger tests for now
+                     dir('ledger-service') {
+                         sh 'npm install'
+                         sh 'npm test'
+                     }
+                 }
+             }
         }
 
         stage('Build Docker Images') {
             steps {
                 script {
                     echo '🔨 Building Docker Images...'
-                    // Build all 4 services in parallel to save time
+                    // Use the Docker Hub Username from credentials for the image tag
+                    def user = env.DOCKERHUB_CREDENTIALS_USR
+                    
                     parallel(
-                        'Gateway': { sh 'docker build -t yourname/api-gateway:latest ./api-gateway' },
-                        'Auth': { sh 'docker build -t yourname/auth-service:latest ./auth-service' },
-                        'Ledger': { sh 'docker build -t yourname/ledger-service:latest ./ledger-service' },
-                        'Fraud': { sh 'docker build -t yourname/fraud-engine:latest ./fraud-engine' }
+                        'Gateway': { sh "docker build -t ${user}/api-gateway:latest ./api-gateway" },
+                        'Auth': { sh "docker build -t ${user}/auth-service:latest ./auth-service" },
+                        'Ledger': { sh "docker build -t ${user}/ledger-service:latest ./ledger-service" },
+                        'Fraud': { sh "docker build -t ${user}/fraud-engine:latest ./fraud-engine" }
                     )
                 }
             }
@@ -33,12 +61,15 @@ pipeline {
             steps {
                 script {
                     echo '🚀 Pushing to Docker Hub...'
+                    def user = env.DOCKERHUB_CREDENTIALS_USR
+                    
+                    // Log in using the Env Variables provided by the credentials plugin
                     sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
                     
-                    sh 'docker push yourname/api-gateway:latest'
-                    sh 'docker push yourname/auth-service:latest'
-                    sh 'docker push yourname/ledger-service:latest'
-                    sh 'docker push yourname/fraud-engine:latest'
+                    sh "docker push ${user}/api-gateway:latest"
+                    sh "docker push ${user}/auth-service:latest"
+                    sh "docker push ${user}/ledger-service:latest"
+                    sh "docker push ${user}/fraud-engine:latest"
                 }
             }
         }
@@ -47,18 +78,19 @@ pipeline {
             steps {
                 script {
                     echo '☸️ Deploying to K8s...'
-                    // Apply the manifests we created in Phase 4
+                    // We don't need a kubeconfig file because Jenkins is running INSIDE the cluster!
+                    
                     sh 'kubectl apply -f k8s/rabbitmq.yaml'
                     sh 'kubectl apply -f k8s/auth-service.yaml'
                     sh 'kubectl apply -f k8s/ledger-service.yaml'
                     sh 'kubectl apply -f k8s/fraud-engine.yaml'
                     sh 'kubectl apply -f k8s/api-gateway.yaml'
                     
-                    // Apply Auto-Scaling Policies
-                    sh 'kubectl apply -f k8s/hpa.yaml'
-                    
-                    // Apply Observability Stack (ELK)
-                    sh 'kubectl apply -f k8s/elk.yaml'
+                    // Optional: Force a restart to pick up the new images immediately
+                    sh 'kubectl rollout restart deployment/api-gateway'
+                    sh 'kubectl rollout restart deployment/auth-service'
+                    sh 'kubectl rollout restart deployment/ledger-service'
+                    sh 'kubectl rollout restart deployment/fraud-engine'
                 }
             }
         }
