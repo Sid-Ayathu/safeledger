@@ -17,6 +17,18 @@ subjects:
   name: jenkins-admin
   namespace: default
 ---
+# NEW: Persistent Volume Claim (The "Hard Drive")
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,7 +46,7 @@ spec:
       serviceAccountName: jenkins-admin
       securityContext:
         fsGroup: 1000 
-        runAsUser: 0   # Run as root to allow Docker access (Simple for local dev)
+        runAsUser: 0   # Run as root to allow writing to the PVC and Docker Socket
       containers:
       - name: jenkins
         image: jenkins/jenkins:lts
@@ -50,7 +62,8 @@ spec:
           hostPath:
             path: /var/run/docker.sock
         - name: jenkins-data
-          emptyDir: {} # Ephemeral storage (resets on restart) - good for testing
+          persistentVolumeClaim:
+            claimName: jenkins-pvc  # Points to the persistent storage defined above
 ---
 apiVersion: v1
 kind: Service
