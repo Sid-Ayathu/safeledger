@@ -1,17 +1,14 @@
 pipeline {
     agent any
 
-    // Environment block removed: We now fetch secrets dynamically from Vault for higher security
+    // No environment block for credentials - we fetch them strictly from Vault
 
     stages {
         stage('Setup Tools') {
             steps {
                 script {
                     echo '🔧 Installing Tools (Docker, Kubectl, Node.js)...'
-                    // 1. Install Docker CLI and Node.js/NPM (using apt-get since we run as root)
                     sh 'apt-get update && apt-get install -y docker.io nodejs npm'
-                    
-                    // 2. Install Kubectl
                     sh 'curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
                     sh 'chmod +x kubectl && mv kubectl /usr/local/bin/'
                 }
@@ -28,10 +25,8 @@ pipeline {
              steps {
                  script {
                      echo '🧪 Running Tests...'
-                     // Only running Ledger tests for now
                      dir('ledger-service') {
                          sh 'npm install'
-                         // Fix permission issue where jest binary is not executable
                          sh 'chmod +x node_modules/.bin/jest'
                          sh 'npm test'
                      }
@@ -42,13 +37,12 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 // Secure Storage: Fetching credentials from Vault
-                // Note: Requires "HashiCorp Vault" plugin and a running Vault instance
-                withVault(configuration: [vaultUrl: 'http://vault.default:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
+                // We use the full DNS name: vault.default.svc.cluster.local
+                withVault(configuration: [vaultUrl: 'http://vault.default.svc.cluster.local:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
                           vaultSecrets: [[path: 'secret/data/safeledger', secretValues: [
                               [envVar: 'DOCKERHUB_USR', vaultKey: 'username']]]]) {
                     script {
                         echo '🔨 Building Docker Images...'
-                        // Use the Username fetched from Vault
                         def user = env.DOCKERHUB_USR
                         
                         parallel(
@@ -64,8 +58,8 @@ pipeline {
 
         stage('Push to Registry') {
             steps {
-                // Secure Storage: Fetching full credentials (User + Password) from Vault
-                withVault(configuration: [vaultUrl: 'http://vault.default:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
+                // Secure Storage: Fetching User + Password from Vault
+                withVault(configuration: [vaultUrl: 'http://vault.default.svc.cluster.local:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
                           vaultSecrets: [[path: 'secret/data/safeledger', secretValues: [
                               [envVar: 'DOCKERHUB_USR', vaultKey: 'username'],
                               [envVar: 'DOCKERHUB_PSW', vaultKey: 'password']]]]) {
@@ -89,7 +83,6 @@ pipeline {
             steps {
                 script {
                     echo '☸️ Deploying to K8s...'
-                    // We don't need a kubeconfig file because Jenkins is running INSIDE the cluster!
                     
                     sh 'kubectl apply -f k8s/rabbitmq.yaml'
                     sh 'kubectl apply -f k8s/auth-service.yaml'
@@ -97,11 +90,9 @@ pipeline {
                     sh 'kubectl apply -f k8s/fraud-engine.yaml'
                     sh 'kubectl apply -f k8s/api-gateway.yaml'
                     
-                    // Deploy Observability Stack (ELK) & Autoscaling
                     sh 'kubectl apply -f k8s/elk.yaml'
                     sh 'kubectl apply -f k8s/hpa.yaml'
                     
-                    // Optional: Force a restart to pick up the new images immediately
                     sh 'kubectl rollout restart deployment/api-gateway'
                     sh 'kubectl rollout restart deployment/auth-service'
                     sh 'kubectl rollout restart deployment/ledger-service'
