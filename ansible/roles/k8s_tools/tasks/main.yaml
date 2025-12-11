@@ -1,0 +1,17 @@
+---
+- name: Download Kubectl
+  get_url:
+    url: "https://dl.k8s.io/release/{{ k8s_version }}/bin/linux/amd64/kubectl"
+    dest: /tmp/kubectl
+    mode: '0755'
+
+- name: Move Kubectl to bin
+  command: mv /tmp/kubectl /usr/local/bin/kubectl
+  args:
+    creates: /usr/local/bin/kubectl  # Only run if file doesn't exist
+
+- name: Install K8s Metrics Server (for HPA)
+  shell: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  ignore_errors: yes
+  # Note: This might fail if the cluster isn't reachable from this specific node,
+  # but it's good practice to have the config ready.

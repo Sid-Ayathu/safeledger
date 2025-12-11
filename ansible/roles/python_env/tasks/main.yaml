@@ -1,0 +1,10 @@
+---
+- name: Install Pip
+  apt:
+    name: python3-pip
+    state: present
+
+- name: Install Fraud Engine Dependencies
+  pip:
+    name: "{{ python_packages }}"
+    state: present

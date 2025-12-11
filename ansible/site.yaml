@@ -1,0 +1,16 @@
+---
+- name: Configure SafeLedger Infrastructure
+  hosts: all
+  become: yes  # Run as root (sudo)
+  vars:
+    # Variables can be overwritten per environment
+    k8s_version: "v1.30.0"
+    python_packages:
+      - pika
+      - requests
+
+  roles:
+    - common      # Basic system utils (curl, git, etc.)
+    - docker      # Docker engine setup
+    - k8s_tools   # Kubectl and helper scripts
+    - python_env  # Dependencies for the Fraud Engine
