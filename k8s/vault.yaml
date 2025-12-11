@@ -21,6 +21,10 @@ spec:
         args: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-root-token-id=root"]
         ports:
         - containerPort: 8200
+        # FIX: Tell the CLI to use HTTP by default
+        env:
+        - name: VAULT_ADDR
+          value: "http://127.0.0.1:8200"
         securityContext:
           capabilities:
             add: ["IPC_LOCK"]
