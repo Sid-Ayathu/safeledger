@@ -36,10 +36,9 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                // Secure Storage: Fetching credentials from Vault
-                // We use the full DNS name: vault.default.svc.cluster.local
+                // FIXED: Removed '/data' from path. Plugin handles v2 structure automatically.
                 withVault(configuration: [vaultUrl: 'http://vault.default.svc.cluster.local:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
-                          vaultSecrets: [[path: 'secret/data/safeledger', secretValues: [
+                          vaultSecrets: [[path: 'secret/safeledger', secretValues: [
                               [envVar: 'DOCKERHUB_USR', vaultKey: 'username']]]]) {
                     script {
                         echo '🔨 Building Docker Images...'
@@ -58,9 +57,9 @@ pipeline {
 
         stage('Push to Registry') {
             steps {
-                // Secure Storage: Fetching User + Password from Vault
+                // FIXED: Removed '/data' from path here too.
                 withVault(configuration: [vaultUrl: 'http://vault.default.svc.cluster.local:8200', vaultCredentialId: 'jenkins-vault-role', engineVersion: 2], 
-                          vaultSecrets: [[path: 'secret/data/safeledger', secretValues: [
+                          vaultSecrets: [[path: 'secret/safeledger', secretValues: [
                               [envVar: 'DOCKERHUB_USR', vaultKey: 'username'],
                               [envVar: 'DOCKERHUB_PSW', vaultKey: 'password']]]]) {
                     script {
