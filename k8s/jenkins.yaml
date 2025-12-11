@@ -1,88 +1,76 @@
 apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: jenkins-admin
-  namespace: default
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: jenkins-admin
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: jenkins-admin
-  namespace: default
----
-# NEW: Persistent Volume Claim (The "Hard Drive")
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: jenkins-pvc
+  name: vault-pvc
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+data:
+  vault.hcl: |
+    ui = true
+    disable_mlock = true
+    
+    # Store data on the "Hard Drive" (PVC) instead of RAM
+    storage "file" {
+      path = "/vault/data"
+    }
+    
+    listener "tcp" {
+      address = "0.0.0.0:8200"
+      tls_disable = 1
+    }
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: jenkins
+  name: vault
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: jenkins
+      app: vault
   template:
     metadata:
-      annotations:
-        # Forces a restart to clear stuck 'apt-get' locks
-        rollout/restartedAt: "2025-12-11T09:20:00Z"
       labels:
-        app: jenkins
+        app: vault
     spec:
-      serviceAccountName: jenkins-admin
-      securityContext:
-        fsGroup: 1000 
-        runAsUser: 0   # Run as root to allow writing to the PVC and Docker Socket
-      
-      # FIX: Force DNS over TCP to solve resolution errors on Docker Desktop
-      dnsConfig:
-        options:
-          - name: use-vc
-      
       containers:
-      - name: jenkins
-        image: jenkins/jenkins:lts
+      - name: vault
+        image: hashicorp/vault:1.13.3
+        args: ["server", "-config=/vault/config/vault.hcl"]
         ports:
-          - containerPort: 8080
+        - containerPort: 8200
+        securityContext:
+          capabilities:
+            add: ["IPC_LOCK"]
         volumeMounts:
-          - name: docker-sock
-            mountPath: /var/run/docker.sock
-          - name: jenkins-data
-            mountPath: /var/jenkins_home
+          - name: vault-config
+            mountPath: /vault/config
+          - name: vault-data
+            mountPath: /vault/data
       volumes:
-        - name: docker-sock
-          hostPath:
-            path: /var/run/docker.sock
-        - name: jenkins-data
+        - name: vault-config
+          configMap:
+            name: vault-config
+        - name: vault-data
           persistentVolumeClaim:
-            claimName: jenkins-pvc  # Points to the persistent storage defined above
+            claimName: vault-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: jenkins
+  name: vault
 spec:
-  type: NodePort
   selector:
-    app: jenkins
+    app: vault
   ports:
-  - port: 8080
-    targetPort: 8080
-    nodePort: 32000
+  - port: 8200
+    targetPort: 8200
