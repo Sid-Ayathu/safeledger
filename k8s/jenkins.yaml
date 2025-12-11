@@ -40,6 +40,9 @@ spec:
       app: jenkins
   template:
     metadata:
+      annotations:
+        # Forces a restart to clear stuck 'apt-get' locks
+        rollout/restartedAt: "2025-12-11T09:20:00Z"
       labels:
         app: jenkins
     spec:
@@ -47,6 +50,12 @@ spec:
       securityContext:
         fsGroup: 1000 
         runAsUser: 0   # Run as root to allow writing to the PVC and Docker Socket
+      
+      # FIX: Force DNS over TCP to solve resolution errors on Docker Desktop
+      dnsConfig:
+        options:
+          - name: use-vc
+      
       containers:
       - name: jenkins
         image: jenkins/jenkins:lts
