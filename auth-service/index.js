@@ -15,15 +15,22 @@ app.use(express.json());
 // --- DATABASE HELPERS ---
 function getDb() {
     if (!fs.existsSync(DB_PATH)) {
-        // Initialize with default admin (hashed password for 'password123')
-        // Hash generated via bcrypt.hashSync('password123', 10)
+        // Initialize with default admin AND default user for load testing
+        // We use hashSync here only for initialization convenience
+        const defaultPasswordHash = bcrypt.hashSync("password123", 10);
+        
         const initialData = [
             { 
                 id: 1, 
                 username: "admin", 
-                // This is the HASH of 'password123'
-                password: "$2a$10$w.2Z0pQLu9.i9/j9.i9/j.2Z0pQLu9.i9/j9.i9/j.2Z0pQLu9", 
+                password: defaultPasswordHash, 
                 role: "admin" 
+            },
+            {
+                id: 2,
+                username: "user", 
+                password: defaultPasswordHash,
+                role: "customer"
             }
         ];
         fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
@@ -42,54 +49,62 @@ app.get('/health', (req, res) => {
 
 // REGISTRATION (Hashes Password)
 app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
-    const users = getDb();
-    
-    if (users.find(u => u.username === username)) {
-        return res.status(400).json({ message: "Username already exists" });
+    try {
+        const { username, password } = req.body;
+        const users = getDb();
+        
+        if (users.find(u => u.username === username)) {
+            return res.status(400).json({ message: "Username already exists" });
+        }
+
+        // ENCRYPTION STEP: Hash the password with a salt round of 10
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+            id: users.length + 1,
+            username,
+            password: hashedPassword, // Store the hash, NOT the plain text
+            role: "customer"
+        };
+        
+        users.push(newUser);
+        saveDb(users);
+        
+        console.log(`🆕 New User Registered: ${username} (ID: ${newUser.id})`);
+        res.json({ message: "Registration successful", user: { id: newUser.id, username } });
+    } catch (e) {
+        res.status(500).json({ message: "Internal Server Error" });
     }
-
-    // ENCRYPTION STEP: Hash the password with a salt round of 10
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = {
-        id: users.length + 1,
-        username,
-        password: hashedPassword, // Store the hash, NOT the plain text
-        role: "customer"
-    };
-    
-    users.push(newUser);
-    saveDb(users);
-    
-    console.log(`🆕 New User Registered: ${username} (ID: ${newUser.id})`);
-    res.json({ message: "Registration successful", user: { id: newUser.id, username } });
 });
 
 // LOGIN (Verifies Hash)
 app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    const users = getDb();
-    
-    const user = users.find(u => u.username === username);
+    try {
+        const { username, password } = req.body;
+        const users = getDb();
+        
+        const user = users.find(u => u.username === username);
 
-    if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        // ENCRYPTION STEP: Compare input password with stored hash
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (isMatch) {
+            const token = jwt.sign(
+                { id: user.id, username: user.username, role: user.role },
+                SECRET_KEY,
+                { expiresIn: '1h' }
+            );
+            return res.json({ token, id: user.id });
+        }
+
+        res.status(401).json({ message: "Invalid credentials" });
+    } catch (e) {
+        res.status(500).json({ message: "Internal Server Error" });
     }
-
-    // ENCRYPTION STEP: Compare input password with stored hash
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (isMatch) {
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            SECRET_KEY,
-            { expiresIn: '1h' }
-        );
-        return res.json({ token, id: user.id });
-    }
-
-    res.status(401).json({ message: "Invalid credentials" });
 });
 
 app.post('/verify', (req, res) => {
@@ -103,7 +118,7 @@ app.post('/verify', (req, res) => {
         res.json({ valid: false });
     }
 });
-//
+
 app.listen(PORT, () => {
     console.log(`🔐 Auth Service running on port ${PORT}`);
 });
