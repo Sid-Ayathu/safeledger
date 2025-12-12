@@ -1,0 +1,79 @@
+{
+  "accounts": [
+    {
+      "userId": 1,
+      "balance": 1000
+    },
+    {
+      "userId": 2,
+      "balance": 30400
+    }
+  ],
+  "transactions": {
+    "1000": {
+      "transactionId": "1000",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 9000,
+      "timestamp": "2025-12-12T17:38:18.499Z",
+      "status": "COMPLETED"
+    },
+    "1001": {
+      "transactionId": "1001",
+      "senderId": 2,
+      "recipientId": 100,
+      "amount": 1,
+      "timestamp": "2025-12-12T17:42:44.754Z",
+      "status": "COMPLETED"
+    },
+    "1002": {
+      "transactionId": "1002",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 100,
+      "timestamp": "2025-12-12T17:42:57.147Z",
+      "status": "COMPLETED"
+    },
+    "1003": {
+      "transactionId": "1003",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 99,
+      "timestamp": "2025-12-12T17:43:09.710Z",
+      "status": "COMPLETED"
+    },
+    "1004": {
+      "transactionId": "1004",
+      "senderId": 2,
+      "recipientId": 105,
+      "amount": 105,
+      "timestamp": "2025-12-12T17:43:22.410Z",
+      "status": "COMPLETED"
+    },
+    "1005": {
+      "transactionId": "1005",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 195,
+      "timestamp": "2025-12-12T17:43:31.592Z",
+      "status": "COMPLETED"
+    },
+    "1006": {
+      "transactionId": "1006",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 100,
+      "timestamp": "2025-12-12T17:43:40.854Z",
+      "status": "COMPLETED"
+    },
+    "1007": {
+      "transactionId": "1007",
+      "senderId": 2,
+      "recipientId": 1,
+      "amount": 10000,
+      "timestamp": "2025-12-12T17:43:47.569Z",
+      "status": "COMPLETED"
+    }
+  },
+  "currentTransactionId": 1008
+}

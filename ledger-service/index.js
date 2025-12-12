@@ -18,7 +18,6 @@ const DB_PATH = path.join(__dirname, 'ledger_db.json');
 // --- DATABASE HELPERS ---
 function getDb() {
     if (!fs.existsSync(DB_PATH)) {
-        // Initialize default DB if it doesn't exist
         const initialData = {
             accounts: [
                 { userId: 1, balance: 1000 }, 
@@ -39,10 +38,8 @@ function saveDb(data) {
 let channel;
 
 // --- ARTIFICIAL LOAD GENERATOR ---
-// Triggers CPU spike for HPA Demo
 function simulateHeavyTask() {
     let result = 0;
-    // Loop 5 million times
     for (let i = 0; i < 5000000; i++) {
         result += Math.sqrt(i) * Math.random();
     }
@@ -88,16 +85,15 @@ app.get('/health', (req, res) => {
     res.json({ service: 'Ledger Service', status: 'Active' });
 });
 
-// Check Balance (CPU Intensive)
 app.get('/balance', authenticateToken, (req, res) => {
-    // TRIGGER: Simulate load when checking balance
     simulateHeavyTask();
 
     const db = getDb();
-    let account = db.accounts.find(acc => acc.userId === req.user.id);
+    // Use loose comparison (==) to handle string/number IDs
+    let account = db.accounts.find(acc => acc.userId == req.user.id);
     
     if (!account) {
-        // Lazy Initialization (This is the ONLY place account is auto-created)
+        // Lazy Initialization
         account = { userId: req.user.id, balance: 1000 }; 
         db.accounts.push(account);
         console.log(`🆕 Created account for User ${req.user.id} with $1000 bonus`);
@@ -115,32 +111,35 @@ app.get('/status/:transactionId', authenticateToken, (req, res) => {
     res.json(transaction);
 });
 
-// Transfer Money (CPU Intensive)
+// Transfer Money
 app.post('/transfer', authenticateToken, async (req, res) => {
-    // TRIGGER: Simulate load when transferring money
     simulateHeavyTask();
 
     const db = getDb();
     const { amount, recipientId } = req.body;
     const senderId = req.user.id;
 
-    // Ensure sender has an account
-    let senderAcc = db.accounts.find(acc => acc.userId === senderId);
+    // 1. Check Sender
+    let senderAcc = db.accounts.find(acc => acc.userId == senderId);
     if (!senderAcc) {
-        // Strict check: Do NOT auto-create account on transfer
-        return res.status(404).json({ message: "Sender account not found. Please check balance to initialize account." });
+        return res.status(404).json({ message: "Sender account not found. Please check balance first." });
     }
 
+    // 2. Check Recipient
+    let recipientAcc = db.accounts.find(acc => acc.userId == recipientId);
+    if (!recipientAcc) {
+        return res.status(404).json({ message: `Recipient account ${recipientId} does not exist.` });
+    }
+
+    // 3. Check Balance
     if (senderAcc.balance < amount) {
         return res.status(400).json({ message: "Insufficient funds" });
     }
 
-    // Optimistic Update
+    // 4. Execute Deduction
     senderAcc.balance -= amount;
 
-    // Incremental Transaction ID
     const transactionId = (db.currentTransactionId++).toString();
-    
     const transactionEvent = {
         transactionId,
         senderId,
@@ -150,10 +149,7 @@ app.post('/transfer', authenticateToken, async (req, res) => {
         status: "PENDING"
     };
 
-    // Store in memory (DB)
     db.transactions[transactionId] = transactionEvent;
-    
-    // Save state to JSON file
     saveDb(db);
 
     if (channel) {
@@ -176,13 +172,28 @@ app.post('/transaction/update', async (req, res) => {
         db.transactions[transactionId].status = status;
         console.log(`🔄 Transaction ${transactionId} updated to ${status}`);
         
-        // If rejected, refund the money
+        // Retrieve transaction details
+        const tx = db.transactions[transactionId];
+
+        // REFUND LOGIC (If Fraud Detected)
         if (status === 'REJECTED') {
-            const tx = db.transactions[transactionId];
-            const senderAcc = db.accounts.find(acc => acc.userId === tx.senderId);
+            const senderAcc = db.accounts.find(acc => acc.userId == tx.senderId);
             if (senderAcc) {
                 senderAcc.balance += tx.amount;
                 console.log(`↩️  Refunded ${tx.amount} to User ${tx.senderId}`);
+            }
+        }
+        
+        // CREDIT LOGIC (If Verified)
+        if (status === 'COMPLETED') {
+            // FIX: Use loose equality (==) to find recipient even if types mismatch
+            const recipientAcc = db.accounts.find(acc => acc.userId == tx.recipientId);
+            
+            if (recipientAcc) {
+                recipientAcc.balance += tx.amount;
+                console.log(`💰 Credited ${tx.amount} to Recipient ${tx.recipientId}. New Balance: ${recipientAcc.balance}`);
+            } else {
+                console.error(`⚠️ CRITICAL: Recipient ${tx.recipientId} NOT FOUND during credit. Money lost?`);
             }
         }
         
