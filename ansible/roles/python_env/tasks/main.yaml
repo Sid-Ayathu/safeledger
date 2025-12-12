@@ -1,8 +1,16 @@
 ---
-- name: Install Pip
+# Optimization: python:3.9-slim already has pip. 
+# We only try to install it if it's missing to save time.
+- name: Check if pip is installed
+  command: pip --version
+  register: pip_check
+  ignore_errors: yes
+
+- name: Install Pip (only if missing)
   apt:
     name: python3-pip
     state: present
+  when: pip_check.rc != 0
 
 - name: Install Fraud Engine Dependencies
   pip:

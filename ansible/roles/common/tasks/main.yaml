@@ -12,5 +12,5 @@
       - curl
       - gnupg
       - lsb-release
-      - software-properties-common
+      # Removed 'software-properties-common' to fix error in slim containers
     state: present

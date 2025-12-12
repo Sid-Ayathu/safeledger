@@ -9,6 +9,9 @@
     name: docker
     state: started
     enabled: yes
+  # FIX: Ignore errors because we are running inside a simulation container
+  # that doesn't have permission to modify system boot files.
+  ignore_errors: yes
 
 - name: Ensure current user is in docker group
   user:
