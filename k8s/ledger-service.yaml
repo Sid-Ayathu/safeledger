@@ -20,8 +20,8 @@ spec:
     spec:
       containers:
       - name: ledger-service
-        image: ledger-service:latest
-        imagePullPolicy: Never
+        image: salvoslayer/ledger-service:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3002
         

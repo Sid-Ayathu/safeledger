@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: fraud-engine
-        image: fraud-engine:latest
-        imagePullPolicy: Never
+        image: salvoslayer/fraud-engine:latest
+        imagePullPolicy: Always
         env:
         - name: RABBITMQ_HOST
           value: "rabbitmq"

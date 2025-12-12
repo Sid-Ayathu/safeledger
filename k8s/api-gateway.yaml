@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: api-gateway:latest
-        imagePullPolicy: Never
+        image: salvoslayer/api-gateway:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
         env:

@@ -15,8 +15,8 @@ spec:
       containers:
       - name: auth-service
         # In a real pipeline, this image comes from Docker Hub (e.g., yourname/auth-service:latest)
-        image: auth-service:latest 
-        imagePullPolicy: Never # Use local image for now
+        image: salvoslayer/auth-service:latest 
+        imagePullPolicy: Always # Use local image for now
         ports:
         - containerPort: 3001
 ---

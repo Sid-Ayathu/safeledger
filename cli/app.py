@@ -1,28 +1,3 @@
-
-#This script uses the `rich` library to make the terminal look like a pro banking app.
-
-
-### How to Deploy & Run
-
-#We changed `auth-service` and `ledger-service`. We need to push these changes to GitHub so Jenkins updates your Kubernetes cluster.
-
-# ```powershell
-# git add .
-# git commit -m "Feat: Enable Registration and Lazy Account Creation"
-# git push
-# *Wait for Jenkins Build #13 to pass.*
-
-# **2. Set up the CLI (Local Machine)**
-# While Jenkins builds, set up the CLI client on your Windows machine.
-
-
-# **3. Run the App!**
-# Once Jenkins finishes deployment:
-# ```powershell
-# python cli/app.py
-
-# You will see a beautiful terminal UI. Try **Registering** a new user (e.g., `siddharth`), and then login. You should see a $1,000 balance automatically!
-
 import requests
 import time
 import os
@@ -62,9 +37,15 @@ def register():
         if resp.status_code == 200:
             console.print(f"[green]✅ Account created for {username}! You can now login.[/green]")
         else:
-            console.print(f"[red]❌ Error: {resp.json().get('message')}[/red]")
+            # FIX: Robust error handling for non-JSON responses (e.g., 502 Bad Gateway)
+            try:
+                error_msg = resp.json().get('message')
+            except ValueError:
+                error_msg = f"Server Error ({resp.status_code}): {resp.text[:200]}" # Print first 200 chars
+            console.print(f"[red]❌ Error: {error_msg}[/red]")
     except Exception as e:
         console.print(f"[red]❌ Connection Error: {e}[/red]")
+        console.print("[yellow]💡 Hint: Check if 'kubectl port-forward' is running and the Gateway pod is healthy.[/yellow]")
     
     Prompt.ask("\nPress Enter to return...")
 
@@ -88,10 +69,18 @@ def login():
             time.sleep(1)
             main_menu()
         else:
-            console.print("[red]❌ Invalid Credentials[/red]")
+            try:
+                # Try to get specific error message if possible
+                error_text = resp.json().get('message', 'Invalid Credentials')
+            except ValueError:
+                error_text = f"Invalid Credentials (Status: {resp.status_code})"
+                
+            console.print(f"[red]❌ {error_text}[/red]")
             time.sleep(2)
     except Exception as e:
-        console.print(f"[red]❌ Connection Error to Gateway ({GATEWAY_URL}). Is it running?[/red]")
+        console.print(f"[red]❌ Connection Error to Gateway ({GATEWAY_URL}).[/red]")
+        console.print(f"[red]Details: {e}[/red]")
+        console.print("[yellow]💡 Hint: Ensure 'kubectl port-forward svc/api-gateway 3000:3000' is running.[/yellow]")
         Prompt.ask("Press Enter...")
 
 def get_balance():
@@ -132,9 +121,14 @@ def transfer_money():
                 console.print(f"[green]✅ Request Sent! TxID: {tx_id}[/green]")
                 track_transaction(tx_id)
             else:
-                console.print(f"[red]❌ Error: {resp.text}[/red]")
+                try:
+                    err = resp.json().get('message', resp.text)
+                except:
+                    err = f"Status {resp.status_code}"
+                console.print(f"[red]❌ Error: {err}[/red]")
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
+            console.print("[yellow]💡 Hint: Connection lost. Check Port Forwarding.[/yellow]")
     
     Prompt.ask("\nPress Enter to continue...")
 
