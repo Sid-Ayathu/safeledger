@@ -12,18 +12,16 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001'
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
 const QUEUE_NAME = 'transaction_events';
 
-// Mock Data
+// In-Memory Database
 const accounts = [
     { userId: 1, balance: 1000 }, 
-    { userId: 2, balance: 50000 } // Updated: High balance to allow testing Fraud Rules (>9000)
+    { userId: 2, balance: 50000 } 
 ];
-
-// NEW: Store transactions here so we can update them later
-// format: { "trans_id": { status: "PENDING", ... } }
 const transactionStore = {}; 
 
 let channel;
 
+// RabbitMQ Setup
 async function connectRabbitMQ() {
     try {
         const connection = await amqp.connect(RABBITMQ_URL);
@@ -32,11 +30,12 @@ async function connectRabbitMQ() {
         console.log("✅ Connected to RabbitMQ");
     } catch (error) {
         console.error("RabbitMQ Connection Error:", error);
+        // Retry logic could go here
     }
 }
 connectRabbitMQ();
 
-// --- AUTH MIDDLEWARE ---
+// Auth Middleware
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -61,17 +60,23 @@ app.get('/health', (req, res) => {
     res.json({ service: 'Ledger Service', status: 'Active' });
 });
 
+// UPDATED: Check Balance (Auto-creates account if missing)
 app.get('/balance', authenticateToken, (req, res) => {
-    const account = accounts.find(acc => acc.userId === req.user.id);
-    if (!account) return res.status(404).json({ message: "Account not found" });
+    let account = accounts.find(acc => acc.userId === req.user.id);
+    
+    if (!account) {
+        // Lazy Initialization: Create account for new user
+        account = { userId: req.user.id, balance: 1000 }; // Signup Bonus
+        accounts.push(account);
+        console.log(`🆕 Created account for User ${req.user.id} with $1000 bonus`);
+    }
+    
     res.json({ userId: req.user.id, balance: account.balance });
 });
 
-// NEW: Check Status Endpoint (User polls this)
 app.get('/status/:transactionId', authenticateToken, (req, res) => {
     const { transactionId } = req.params;
     const transaction = transactionStore[transactionId];
-    
     if (!transaction) return res.status(404).json({ message: "Transaction not found" });
     res.json(transaction);
 });
@@ -80,12 +85,18 @@ app.post('/transfer', authenticateToken, async (req, res) => {
     const { amount, recipientId } = req.body;
     const senderId = req.user.id;
 
-    const senderAcc = accounts.find(acc => acc.userId === senderId);
-    if (!senderAcc || senderAcc.balance < amount) {
+    // Ensure sender has an account
+    let senderAcc = accounts.find(acc => acc.userId === senderId);
+    if (!senderAcc) {
+        // Auto-create if they try to transfer immediately after signup
+        senderAcc = { userId: senderId, balance: 1000 };
+        accounts.push(senderAcc);
+    }
+
+    if (senderAcc.balance < amount) {
         return res.status(400).json({ message: "Insufficient funds" });
     }
 
-    // Optimistic Update
     senderAcc.balance -= amount;
 
     const transactionId = Math.floor(Math.random() * 100000).toString();
@@ -98,12 +109,10 @@ app.post('/transfer', authenticateToken, async (req, res) => {
         status: "PENDING"
     };
 
-    // Store in memory
     transactionStore[transactionId] = transactionEvent;
 
     if (channel) {
         channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(transactionEvent)));
-        console.log(`📨 Event sent to queue: ${transactionId}`);
     }
 
     res.json({ 
@@ -113,28 +122,19 @@ app.post('/transfer', authenticateToken, async (req, res) => {
     });
 });
 
-// NEW: Internal Endpoint for Fraud Engine to call
-// In production, this should be protected by a secret API key or internal network
 app.post('/transaction/update', async (req, res) => {
     const { transactionId, status } = req.body;
-    
     if (transactionStore[transactionId]) {
         transactionStore[transactionId].status = status;
         console.log(`🔄 Transaction ${transactionId} updated to ${status}`);
         
-        // If rejected, refund the money (Simple compensation logic)
         if (status === 'REJECTED') {
             const tx = transactionStore[transactionId];
             const senderAcc = accounts.find(acc => acc.userId === tx.senderId);
-            if (senderAcc) {
-                senderAcc.balance += tx.amount;
-                console.log(`↩️  Refunded ${tx.amount} to User ${tx.senderId}`);
-            }
+            if (senderAcc) senderAcc.balance += tx.amount;
         }
-        
         return res.json({ success: true });
     }
-    // Comment
     res.status(404).json({ error: "Transaction not found" });
 });
 
