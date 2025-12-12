@@ -21,7 +21,18 @@ const transactionStore = {};
 
 let channel;
 
-// RabbitMQ Setup
+// --- ARTIFICIAL LOAD GENERATOR ---
+// Triggers CPU spike for HPA Demo
+function simulateHeavyTask() {
+    let result = 0;
+    // Loop 5 million times
+    for (let i = 0; i < 5000000; i++) {
+        result += Math.sqrt(i) * Math.random();
+    }
+    return result;
+}
+
+// RabbitMQ Connection
 async function connectRabbitMQ() {
     try {
         const connection = await amqp.connect(RABBITMQ_URL);
@@ -30,7 +41,6 @@ async function connectRabbitMQ() {
         console.log("✅ Connected to RabbitMQ");
     } catch (error) {
         console.error("RabbitMQ Connection Error:", error);
-        // Retry logic could go here
     }
 }
 connectRabbitMQ();
@@ -39,6 +49,7 @@ connectRabbitMQ();
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
+
     if (!token) return res.status(401).json({ message: "No token provided" });
 
     try {
@@ -60,13 +71,16 @@ app.get('/health', (req, res) => {
     res.json({ service: 'Ledger Service', status: 'Active' });
 });
 
-// UPDATED: Check Balance (Auto-creates account if missing)
+// Check Balance (CPU Intensive)
 app.get('/balance', authenticateToken, (req, res) => {
+    // TRIGGER: Simulate load when checking balance
+    simulateHeavyTask();
+
     let account = accounts.find(acc => acc.userId === req.user.id);
     
     if (!account) {
-        // Lazy Initialization: Create account for new user
-        account = { userId: req.user.id, balance: 1000 }; // Signup Bonus
+        // Lazy Initialization
+        account = { userId: req.user.id, balance: 1000 }; 
         accounts.push(account);
         console.log(`🆕 Created account for User ${req.user.id} with $1000 bonus`);
     }
@@ -81,14 +95,17 @@ app.get('/status/:transactionId', authenticateToken, (req, res) => {
     res.json(transaction);
 });
 
+// Transfer Money (CPU Intensive)
 app.post('/transfer', authenticateToken, async (req, res) => {
+    // TRIGGER: Simulate load when transferring money
+    simulateHeavyTask();
+
     const { amount, recipientId } = req.body;
     const senderId = req.user.id;
 
     // Ensure sender has an account
     let senderAcc = accounts.find(acc => acc.userId === senderId);
     if (!senderAcc) {
-        // Auto-create if they try to transfer immediately after signup
         senderAcc = { userId: senderId, balance: 1000 };
         accounts.push(senderAcc);
     }
@@ -97,6 +114,7 @@ app.post('/transfer', authenticateToken, async (req, res) => {
         return res.status(400).json({ message: "Insufficient funds" });
     }
 
+    // Optimistic Update
     senderAcc.balance -= amount;
 
     const transactionId = Math.floor(Math.random() * 100000).toString();
@@ -109,10 +127,12 @@ app.post('/transfer', authenticateToken, async (req, res) => {
         status: "PENDING"
     };
 
+    // Store in memory
     transactionStore[transactionId] = transactionEvent;
 
     if (channel) {
         channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(transactionEvent)));
+        console.log(`📨 Event sent to queue: ${transactionId}`);
     }
 
     res.json({ 
@@ -124,17 +144,24 @@ app.post('/transfer', authenticateToken, async (req, res) => {
 
 app.post('/transaction/update', async (req, res) => {
     const { transactionId, status } = req.body;
+    
     if (transactionStore[transactionId]) {
         transactionStore[transactionId].status = status;
         console.log(`🔄 Transaction ${transactionId} updated to ${status}`);
         
+        // If rejected, refund the money
         if (status === 'REJECTED') {
             const tx = transactionStore[transactionId];
             const senderAcc = accounts.find(acc => acc.userId === tx.senderId);
-            if (senderAcc) senderAcc.balance += tx.amount;
+            if (senderAcc) {
+                senderAcc.balance += tx.amount;
+                console.log(`↩️  Refunded ${tx.amount} to User ${tx.senderId}`);
+            }
         }
+        
         return res.json({ success: true });
     }
+    
     res.status(404).json({ error: "Transaction not found" });
 });
 

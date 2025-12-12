@@ -4,15 +4,18 @@ metadata:
   name: ledger-service
 spec:
   replicas: 1
-  # NEW: Zero-Downtime Strategy
+
+  # Zero-Downtime Strategy
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0  # Do not kill the old pod until the new one is ready
-      maxSurge: 1        # Create a new pod first
+      maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: ledger-service
+
   template:
     metadata:
       labels:
@@ -24,17 +27,16 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 3002
-        
-        # NEW: Health Checks (Required for Zero Downtime)
-        # Kubernetes won't switch traffic until this passes
+
+        # Readiness Probe
         readinessProbe:
           httpGet:
             path: /health
             port: 3002
-          initialDelaySeconds: 5  # Give the app 5s to start
-          periodSeconds: 10       # Check every 10s
-        
-        # Self-healing: Restart if this fails
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+        # Liveness Probe
         livenessProbe:
           httpGet:
             path: /health
@@ -47,14 +49,13 @@ spec:
           value: "http://auth-service:3001"
         - name: RABBITMQ_URL
           value: "amqp://rabbitmq"
-        # CRITICAL FOR HPA
+
+        # UPDATED RESOURCES (as you requested)
         resources:
           requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "256Mi"
+            cpu: "50m"
+            memory: "64Mi"
+
 ---
 apiVersion: v1
 kind: Service

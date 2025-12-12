@@ -34,7 +34,7 @@ def process_transaction(ch, method, properties, body):
     time.sleep(2)
 
     new_status = "COMPLETED"
-    if amount > 9000:
+    if amount > 900:
         new_status = "REJECTED"
         print(" ⚠️  FRAUD DETECTED: Amount too high!")
     else:

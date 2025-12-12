@@ -15,10 +15,17 @@ spec:
       containers:
       - name: auth-service
         # In a real pipeline, this image comes from Docker Hub (e.g., yourname/auth-service:latest)
-        image: salvoslayer/auth-service:latest 
+        image: salvoslayer/auth-service:latest
         imagePullPolicy: Always # Use local image for now
         ports:
         - containerPort: 3001
+        resources:
+          requests:
+            cpu: "50m"   # Only 0.05 Core requested
+            memory: "64Mi"
+          limits:
+            cpu: "250m"
+            memory: "128Mi"
 ---
 apiVersion: v1
 kind: Service
