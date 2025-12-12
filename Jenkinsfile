@@ -9,7 +9,9 @@ pipeline {
                 script {
                     echo '🔧 Installing Tools (Docker, Kubectl, Node.js)...'
                     sh 'apt-get update && apt-get install -y docker.io nodejs npm'
-                    sh 'curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"'
+                    
+                    // FIX: Hardcoded version v1.30.0 to prevent download errors
+                    sh 'curl -LO "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"'
                     sh 'chmod +x kubectl && mv kubectl /usr/local/bin/'
                 }
             }
