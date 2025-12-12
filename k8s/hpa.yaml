@@ -8,7 +8,7 @@ spec:
     kind: Deployment
     name: api-gateway
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 5
   targetCPUUtilizationPercentage: 50
 ---
 apiVersion: autoscaling/v1
@@ -21,5 +21,5 @@ spec:
     kind: Deployment
     name: ledger-service
   minReplicas: 1
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 70
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50

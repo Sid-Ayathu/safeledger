@@ -1,6 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const amqp = require('amqplib');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -11,13 +13,28 @@ app.use(express.json());
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
 const QUEUE_NAME = 'transaction_events';
+const DB_PATH = path.join(__dirname, 'ledger_db.json');
 
-// In-Memory Database
-const accounts = [
-    { userId: 1, balance: 1000 }, 
-    { userId: 2, balance: 50000 } 
-];
-const transactionStore = {}; 
+// --- DATABASE HELPERS ---
+function getDb() {
+    if (!fs.existsSync(DB_PATH)) {
+        // Initialize default DB if it doesn't exist
+        const initialData = {
+            accounts: [
+                { userId: 1, balance: 1000 }, 
+                { userId: 2, balance: 50000 } 
+            ],
+            transactions: {},
+            currentTransactionId: 1000
+        };
+        fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
+    }
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+}
+
+function saveDb(data) {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
 
 let channel;
 
@@ -76,13 +93,15 @@ app.get('/balance', authenticateToken, (req, res) => {
     // TRIGGER: Simulate load when checking balance
     simulateHeavyTask();
 
-    let account = accounts.find(acc => acc.userId === req.user.id);
+    const db = getDb();
+    let account = db.accounts.find(acc => acc.userId === req.user.id);
     
     if (!account) {
-        // Lazy Initialization
+        // Lazy Initialization (This is the ONLY place account is auto-created)
         account = { userId: req.user.id, balance: 1000 }; 
-        accounts.push(account);
+        db.accounts.push(account);
         console.log(`🆕 Created account for User ${req.user.id} with $1000 bonus`);
+        saveDb(db);
     }
     
     res.json({ userId: req.user.id, balance: account.balance });
@@ -90,7 +109,8 @@ app.get('/balance', authenticateToken, (req, res) => {
 
 app.get('/status/:transactionId', authenticateToken, (req, res) => {
     const { transactionId } = req.params;
-    const transaction = transactionStore[transactionId];
+    const db = getDb();
+    const transaction = db.transactions[transactionId];
     if (!transaction) return res.status(404).json({ message: "Transaction not found" });
     res.json(transaction);
 });
@@ -100,14 +120,15 @@ app.post('/transfer', authenticateToken, async (req, res) => {
     // TRIGGER: Simulate load when transferring money
     simulateHeavyTask();
 
+    const db = getDb();
     const { amount, recipientId } = req.body;
     const senderId = req.user.id;
 
     // Ensure sender has an account
-    let senderAcc = accounts.find(acc => acc.userId === senderId);
+    let senderAcc = db.accounts.find(acc => acc.userId === senderId);
     if (!senderAcc) {
-        senderAcc = { userId: senderId, balance: 1000 };
-        accounts.push(senderAcc);
+        // Strict check: Do NOT auto-create account on transfer
+        return res.status(404).json({ message: "Sender account not found. Please check balance to initialize account." });
     }
 
     if (senderAcc.balance < amount) {
@@ -117,7 +138,9 @@ app.post('/transfer', authenticateToken, async (req, res) => {
     // Optimistic Update
     senderAcc.balance -= amount;
 
-    const transactionId = Math.floor(Math.random() * 100000).toString();
+    // Incremental Transaction ID
+    const transactionId = (db.currentTransactionId++).toString();
+    
     const transactionEvent = {
         transactionId,
         senderId,
@@ -127,8 +150,11 @@ app.post('/transfer', authenticateToken, async (req, res) => {
         status: "PENDING"
     };
 
-    // Store in memory
-    transactionStore[transactionId] = transactionEvent;
+    // Store in memory (DB)
+    db.transactions[transactionId] = transactionEvent;
+    
+    // Save state to JSON file
+    saveDb(db);
 
     if (channel) {
         channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(transactionEvent)));
@@ -144,21 +170,23 @@ app.post('/transfer', authenticateToken, async (req, res) => {
 
 app.post('/transaction/update', async (req, res) => {
     const { transactionId, status } = req.body;
+    const db = getDb();
     
-    if (transactionStore[transactionId]) {
-        transactionStore[transactionId].status = status;
+    if (db.transactions[transactionId]) {
+        db.transactions[transactionId].status = status;
         console.log(`🔄 Transaction ${transactionId} updated to ${status}`);
         
         // If rejected, refund the money
         if (status === 'REJECTED') {
-            const tx = transactionStore[transactionId];
-            const senderAcc = accounts.find(acc => acc.userId === tx.senderId);
+            const tx = db.transactions[transactionId];
+            const senderAcc = db.accounts.find(acc => acc.userId === tx.senderId);
             if (senderAcc) {
                 senderAcc.balance += tx.amount;
                 console.log(`↩️  Refunded ${tx.amount} to User ${tx.senderId}`);
             }
         }
         
+        saveDb(db);
         return res.json({ success: true });
     }
     

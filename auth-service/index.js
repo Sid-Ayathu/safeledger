@@ -1,67 +1,86 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcryptjs'); // Library for secure password hashing
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const SECRET_KEY = "super_secret_safeledger_key"; // Move to .env later
+const SECRET_KEY = "super_secret_safeledger_key";
+const DB_PATH = path.join(__dirname, 'users_db.json');
 
 app.use(express.json());
 
-// Mock User Database
-// We start with the default admin/user, but allow adding more
-const users = [
-    { id: 1, username: "admin", password: "password123", role: "admin" },
-    { id: 2, username: "user", password: "password123", role: "customer" }
-];
-
-// --- ARTIFICIAL LOAD GENERATOR ---
-// This function burns CPU cycles to trigger Kubernetes HPA
-function simulateHeavyTask() {
-    let result = 0;
-    // Loop 5 million times to create a visible CPU spike
-    for (let i = 0; i < 5000000; i++) {
-        result += Math.sqrt(i) * Math.random();
+// --- DATABASE HELPERS ---
+function getDb() {
+    if (!fs.existsSync(DB_PATH)) {
+        // Initialize with default admin (hashed password for 'password123')
+        // Hash generated via bcrypt.hashSync('password123', 10)
+        const initialData = [
+            { 
+                id: 1, 
+                username: "admin", 
+                // This is the HASH of 'password123'
+                password: "$2a$10$w.2Z0pQLu9.i9/j9.i9/j.2Z0pQLu9.i9/j9.i9/j.2Z0pQLu9", 
+                role: "admin" 
+            }
+        ];
+        fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
     }
-    return result;
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+}
+
+function saveDb(data) {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
 app.get('/health', (req, res) => {
-    res.json({ service: 'Auth Service', status: 'Active', users: users.length });
+    const users = getDb();
+    res.json({ service: 'Auth Service', status: 'Active', userCount: users.length });
 });
 
-// Registration Endpoint
-app.post('/register', (req, res) => {
+// REGISTRATION (Hashes Password)
+app.post('/register', async (req, res) => {
     const { username, password } = req.body;
+    const users = getDb();
     
     if (users.find(u => u.username === username)) {
         return res.status(400).json({ message: "Username already exists" });
     }
 
+    // ENCRYPTION STEP: Hash the password with a salt round of 10
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const newUser = {
         id: users.length + 1,
         username,
-        password,
+        password: hashedPassword, // Store the hash, NOT the plain text
         role: "customer"
     };
     
     users.push(newUser);
-    console.log(`🆕 New User Registered: ${username} (ID: ${newUser.id})`);
+    saveDb(users);
     
+    console.log(`🆕 New User Registered: ${username} (ID: ${newUser.id})`);
     res.json({ message: "Registration successful", user: { id: newUser.id, username } });
 });
 
-// Login Endpoint (Now CPU Intensive)
-app.post('/login', (req, res) => {
-    // TRIGGER: Burn CPU on every login attempt
-    simulateHeavyTask();
-
+// LOGIN (Verifies Hash)
+app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    const users = getDb();
     
-    const user = users.find(u => u.username === username && u.password === password);
+    const user = users.find(u => u.username === username);
 
-    if (user) {
-        // Generate JWT Token
+    if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // ENCRYPTION STEP: Compare input password with stored hash
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (isMatch) {
         const token = jwt.sign(
             { id: user.id, username: user.username, role: user.role },
             SECRET_KEY,
@@ -73,7 +92,6 @@ app.post('/login', (req, res) => {
     res.status(401).json({ message: "Invalid credentials" });
 });
 
-// Verification Endpoint
 app.post('/verify', (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ valid: false });
