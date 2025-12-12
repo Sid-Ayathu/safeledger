@@ -1,11 +1,13 @@
 import unittest
 import time
 from collections import deque
-from main import RiskEngine
+# Import reset_state to clear global variables between tests
+from main import RiskEngine, reset_state
 
 class TestRiskEngine(unittest.TestCase):
     def setUp(self):
         # Initialize a fresh engine before every test
+        reset_state() # <--- CRITICAL FIX: Clear global user_profiles
         self.engine = RiskEngine()
         # Mock a user profile
         self.user_id = "test_user_1"

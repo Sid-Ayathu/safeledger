@@ -16,6 +16,11 @@ LEDGER_URL = os.getenv('LEDGER_URL', 'http://localhost:3002/transaction/update')
 # Structure: { user_id: { 'history': deque([amounts]), 'timestamps': deque([times]) } }
 user_profiles = {}
 
+def reset_state():
+    """Helper for testing: Clears all user profiles"""
+    global user_profiles
+    user_profiles = {}
+
 # --- FRAUD RULES ENGINE ---
 
 class RiskEngine:
