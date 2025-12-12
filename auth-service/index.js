@@ -103,7 +103,7 @@ app.post('/verify', (req, res) => {
         res.json({ valid: false });
     }
 });
-
+//
 app.listen(PORT, () => {
     console.log(`🔐 Auth Service running on port ${PORT}`);
 });
