@@ -8,7 +8,13 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 const SECRET_KEY = "super_secret_safeledger_key";
-const DB_PATH = path.join(__dirname, 'users_db.json');
+
+const DB_DIR = path.join(__dirname, 'data');
+// Ensure directory exists
+if (!fs.existsSync(DB_DIR)){
+    fs.mkdirSync(DB_DIR);
+}
+const DB_PATH = path.join(DB_DIR, 'users_db.json');
 
 app.use(express.json());
 

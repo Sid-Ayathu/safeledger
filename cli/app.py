@@ -133,7 +133,7 @@ def transfer_money():
     Prompt.ask("\nPress Enter to continue...")
 
 def track_transaction(tx_id):
-    console.print("🕵️  Tracking status on Blockchain (Ledger)...")
+    console.print("🕵️  Tracking status on Ledger...")
     headers = {"Authorization": f"Bearer {current_token}"}
     
     # Poll for status update (waiting for RabbitMQ + Python Fraud Engine)
