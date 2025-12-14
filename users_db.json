@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "$2b$10$.SbIZP5gSmy5l.pCHQ9K.eAhlmKOaZs.CEhrvn8U4MgCk2/Mi2.16",
+    "role": "admin"
+  },
+  {
+    "id": 2,
+    "username": "user",
+    "password": "$2b$10$.SbIZP5gSmy5l.pCHQ9K.eAhlmKOaZs.CEhrvn8U4MgCk2/Mi2.16",
+    "role": "customer"
+  },
+  {
+    "id": 3,
+    "username": "sid1",
+    "password": "$2b$10$am/M/hvJWjn6wrbWPXCEOOMlKMQz98ED6sr1jnILebo4OySrcC5xm",
+    "role": "customer"
+  },
+  {
+    "id": 4,
+    "username": "sid2",
+    "password": "$2b$10$yMahqImkHiD5nU0hbFiZjeIj.Q7agRiYIh81EmCMBjWQ3e7J1g5em",
+    "role": "customer"
+  },
+  {
+    "id": 5,
+    "username": "sid3",
+    "password": "$2b$10$jhSk7kzBmKkD5rq4.LfDmOCYDBPFfR3FJBpJ3UPsMiV7YKXe0a7AS",
+    "role": "customer"
+  }
+]
