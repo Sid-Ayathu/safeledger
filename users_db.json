@@ -28,5 +28,11 @@
     "username": "sid3",
     "password": "$2b$10$jhSk7kzBmKkD5rq4.LfDmOCYDBPFfR3FJBpJ3UPsMiV7YKXe0a7AS",
     "role": "customer"
+  },
+  {
+    "id": 6,
+    "username": "bot_user",
+    "password": "$2b$10$r6n0ffaQVmRlqI4NfjUPkOmVCU9PpgE8AWCXwnDtzKhcaa857HhVa",
+    "role": "customer"
   }
 ]
