@@ -1,21 +1,30 @@
+# --- 1. Define the Storage (The PVC) ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ledger-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# --- 2. Define the Application ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ledger-service
 spec:
   replicas: 1
-
-  # Zero-Downtime Strategy
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
-
   selector:
     matchLabels:
       app: ledger-service
-
   template:
     metadata:
       labels:
@@ -27,35 +36,38 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 3002
-
-        # Readiness Probe
+        
+        # Mount the Volume
+        volumeMounts:
+        - name: ledger-storage
+          mountPath: /app/data
+        
+        # Health Checks
         readinessProbe:
           httpGet:
             path: /health
             port: 3002
           initialDelaySeconds: 5
           periodSeconds: 10
-
-        # Liveness Probe
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3002
-          initialDelaySeconds: 15
-          periodSeconds: 20
-
+        
         env:
         - name: AUTH_SERVICE_URL
           value: "http://auth-service:3001"
         - name: RABBITMQ_URL
           value: "amqp://rabbitmq"
-
-        # UPDATED RESOURCES (as you requested)
+        
         resources:
           requests:
-            cpu: "50m"
-            memory: "64Mi"
-
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+            
+      volumes:
+      - name: ledger-storage
+        persistentVolumeClaim:
+          claimName: ledger-db-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -68,4 +80,3 @@ spec:
   - protocol: TCP
     port: 3002
     targetPort: 3002
-
